@@ -1,0 +1,1 @@
+function RandomDraws = GaussianDraw(SeedVec, Mean, StdDev)    xVec = (Mean - 4*StdDev):(StdDev/50):(Mean + 4*StdDev);        DensityVec = (1/(StdDev*sqrt(2*pi)))*...        exp(-(xVec - Mean*ones(size(xVec))).^2/(2*StdDev^2));        yVec = (StdDev/50)*cumsum(DensityVec);        RandomDraws = interp1(yVec, xVec, SeedVec, 'spline');end

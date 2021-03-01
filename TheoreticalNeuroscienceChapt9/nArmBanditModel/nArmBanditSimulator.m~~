@@ -1,0 +1,28 @@
+function SimOutputStructArray = nArmBanditSimulator(RewardsArray, InitialActionValuesVec, params)
+
+
+Beta = params(1);
+Eta = params(2);
+
+[nIterations, nActions] = size(RewardsArray);
+
+ActionValuesArray = NaN*ones(size(RewardsArray));
+
+ActionValuesArray(1,:) = InitialActionValuesVec;
+
+for i = 1:(nIterations-1)
+   
+    ProbVec = SoftMaxProbabilities(ActionValuesVec, Beta);
+    ActionChoice = Chooser(ProbVec);
+    
+    ActorStruct = DirectActor(ActionValuesArray(i,:), RewardsArray(i,:), ActionChoice, Eta);
+    
+    ActionValuesArray(i+1,:) = ActorStruct.NewActionValuesVec;
+    
+    SimOutputStructArray(i) = ActorStruct;
+    
+end
+
+SimOutputStructArray = SimOutputStructArray';
+
+end
