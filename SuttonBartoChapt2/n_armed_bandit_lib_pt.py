@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats
@@ -5,31 +6,54 @@ from typing import Dict, List, Union, Callable, Tuple, Any
 from importlib import reload
 
 
-def stochastic_chooser(probs: np.ndarray, n_picks:int, bin_bounds: str = 'ceiling_inclusive'):
-    indices = np.arange(0, probs.shape[0])
-    cum_probs_ceilings = np.cumsum(probs)
-    cum_probs_floors = np.cumsum(np.hstack([0.0, probs[:-1]]).astype(float))
-    seeds = np.random.rand(n_picks,)
+def stochastic_chooser(
+    probs: Union[np.ndarray, torch.Tensor],
+    n_picks:int, 
+    bin_bounds: str = 'ceiling_inclusive',
+    device: torch.device=torch.device("cpu")
+) -> torch.Tensor:
     
-    picks = np.nan*np.ones(n_picks,)
+    if isinstance(probs, np.ndarray):
+        probs = torch.tensor(
+            probs,
+            dtype=torch.float32,
+            device=device
+        )
+    indices = torch.arange(0, probs.shape[0], device=device)
+    cum_probs_ceilings = torch.cumsum(probs, 0)
+    cum_probs_floors = torch.cumsum(
+        torch.hstack([
+            torch.tensor([0.0], device=device),
+            probs[:-1]
+        ]), 0
+    )
+    seeds = torch.rand(n_picks, device=device)
+    
+    picks = torch.nan * torch.ones(n_picks, device=device)
     for i, seed in enumerate(seeds):
         if bin_bounds == 'floor_inclusive':
-            ceiling_check = np.logical_or((cum_probs_ceilings > seed), (1.0 * np.ones_like(cum_probs_ceilings) <= seed))
+            ceiling_check = torch.logical_or(
+                (cum_probs_ceilings > seed),
+                (1.0*np.ones_like(cum_probs_ceilings) <= seed)
+            )
             floor_check = (cum_probs_floors <= seed)
             select_mask = np.logical_and(ceiling_check, floor_check)
             pick = indices[select_mask]
 
         if bin_bounds == 'ceiling_inclusive':
-            floor_check = np.logical_or((cum_probs_floors < seed), (0.0 * np.ones_like(cum_probs_floors) >= seed))
+            floor_check = torch.logical_or(
+                (cum_probs_floors < seed),
+                (0.0 * torch.ones_like(cum_probs_floors) >= seed)
+            )
             ceiling_check = (cum_probs_ceilings >= seed)
-            select_mask = np.logical_and(ceiling_check, floor_check)
+            select_mask = torch.logical_and(ceiling_check, floor_check)
             pick = indices[select_mask]
             
         picks[i] = pick
         
-    return picks.astype(int)
+    return torch.tensor(picks, dtype=torch.int32)
 
-
+# TODO: Convert to pytorch
 def stochastic_reward_gen(mean_reward_value: float, standard_dev: float) -> float:
     
     seed = np.random.rand(1)
@@ -73,20 +97,28 @@ def action_value_estimator_alpha(
         
     return updated_estimate
 
-
-def epsilon_greedy_actor(action_value_estimates: np.ndarray, epsilon: float) -> int:
+# TODO: Convert to pytorch
+def epsilon_greedy_actor(
+    action_value_estimates: Union[np.ndarray, torch.Tensor],
+    epsilon: float
+) -> int:
     
+    if isinstance(action_value_estimates, np.ndarray):
+        action_value_estimates = torch.tensor(
+            action_value_estimates, dtype=torch.float32
+        )
+
     n_actions = action_value_estimates.shape[0]
-    action_indices = np.arange(0, n_actions)
-    seed = np.random.rand(1)
+    action_indices = torch.arange(0, n_actions)
+    seed = torch.rand(1)
     if seed < epsilon:
-        action_index = np.random.choice(action_indices, size=1, replace=True)
+        action_index = np.random.choice(action_indices, size=1, replace=True)  # need to convert to a pytorch equivalent !
     else:
-        action_index = np.argmax(action_value_estimates)
+        action_index = torch.argmax(action_value_estimates)
         
     return action_index
 
-
+# TODO: Convert to pytorch
 def softmax_actor(action_value_estimates: np.ndarray, tau: float) -> int:
 
     denom = np.sum(np.exp(action_value_estimates / tau))
@@ -98,7 +130,7 @@ def softmax_actor(action_value_estimates: np.ndarray, tau: float) -> int:
     
     return action_index
 
-
+# TODO: Convert to pytorch
 def draw_random_from_normal(n_actions: int, mean: float, std_dev: float) -> np.ndarray:
     
     seeds = np.random.rand(n_actions)
@@ -106,7 +138,7 @@ def draw_random_from_normal(n_actions: int, mean: float, std_dev: float) -> np.n
     
     return drawn_values
 
-
+# TODO: Convert to pytorch
 def n_armed_bandit_solve(
     n_arms: int,
     n_runs: int,
@@ -127,8 +159,8 @@ def n_armed_bandit_solve(
     
     # Run loop
     for run_i in range(0, n_runs):
-        action_record = np.nan * np.ones(n_steps_per_run)
-        reward_record = np.nan * np.ones(n_steps_per_run)
+        action_record = np.nan*np.ones(n_steps_per_run)
+        reward_record = np.nan*np.ones(n_steps_per_run)
 
         if "non_stationary" in  kwargs.keys():
             action_values_actual = 0.5 * np.ones(n_arms)
