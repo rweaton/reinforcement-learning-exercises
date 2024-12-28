@@ -1,6 +1,10 @@
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
 import scipy.stats as stats
+from typing import Tuple, Union, List
+
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 def stochChooser(pVec, nPicks, binBounds='ceilingInclusive'):
     indices = np.arange(0, pVec.shape[0])
@@ -31,3 +35,56 @@ def stochChooser(pVec, nPicks, binBounds='ceilingInclusive'):
 
         picks[i] = pick
     return picks.astype(int)
+
+def stochChooser_pt(
+    pVec: Union[torch.Tensor, np.ndarray],
+    nPicks: int,
+    binBounds: str='ceilingInclusive',
+    device: torch.device=torch.device("cpu")
+) -> torch.Tensor:
+    
+    if isinstance(pVec, np.ndarray):
+        print("Converting pVec to torch tensor...")
+        pVec = torch.tensor(pVec, dtype=torch.float32, device=device)
+
+    indices = torch.arange(0, pVec.shape[0], dtype=torch.int32, device=device)
+    print(f"Value of indices: {indices}")
+    cpVecHigh = torch.cumsum(pVec, 0)
+    cpVecLow = torch.cumsum(torch.hstack([
+        torch.tensor([0.0], device=device),
+        pVec[:-1]
+    ]), 0)
+    seeds = torch.rand(nPicks, device=device)
+    print(f"Value of seeds: {seeds}")
+
+    picks = torch.nan * torch.ones(nPicks, device=device)
+    for i, seed in enumerate(seeds):
+        if binBounds == 'floorInclusive':
+            ceiling_check = torch.logical_or(
+                (cpVecHigh > seed),
+                (1.0 * torch.ones_like(cpVecHigh) <= seed)
+            )
+            floor_check = (cpVecLow <= seed)
+            selMask = torch.logical_and(
+                ceiling_check,
+                floor_check
+            )
+            pick = indices[selMask]
+
+        if binBounds == 'ceilingInclusive':
+            floor_check = torch.logical_or(
+                (cpVecLow < seed),
+                (0.0 * torch.ones_like(cpVecLow) >= seed)
+            )
+            ceiling_check = (cpVecHigh >= seed)
+            selMask = torch.logical_and(
+                ceiling_check,
+                floor_check
+            )
+            print(f"Value of selMask: {selMask}")
+            pick = indices[selMask]
+
+        print(f"Value of pick: {pick}")
+        picks[i] = pick
+
+    return torch.tensor(picks, dtype=torch.int32)
